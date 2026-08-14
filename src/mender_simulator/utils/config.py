@@ -25,6 +25,8 @@ class SimulatorConfig:
     log_file: str = "simulator.log"
     log_level: str = "INFO"
     database_path: str = "devices.db"
+    num_threads: int = 4
+    connection_limit: int = 25
 
 
 @dataclass
@@ -86,7 +88,9 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
         success_rate=sim_data.get('success_rate', 0.8),
         log_file=sim_data.get('log_file', 'simulator.log'),
         log_level=sim_data.get('log_level', 'INFO'),
-        database_path=sim_data.get('database_path', 'devices.db')
+        database_path=sim_data.get('database_path', 'devices.db'),
+        num_threads=sim_data.get('num_threads', 4),
+        connection_limit=sim_data.get('connection_limit', 25)
     )
 
     # Parse industry profiles

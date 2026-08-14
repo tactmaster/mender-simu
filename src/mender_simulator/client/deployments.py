@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
 
-from .exceptions import AuthenticationError
+from .exceptions import AuthenticationError, RateLimitError, RequestTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -109,11 +109,20 @@ class DeploymentsClient:
                 elif response.status == 401:
                     logger.warning("Authentication token expired or invalid")
                     raise AuthenticationError("Token expired")
+                elif response.status == 429:
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    raise RateLimitError(
+                        f"Rate limited during deployment check, retry after {retry_after}s",
+                        retry_after=retry_after,
+                        endpoint="deployments/check",
+                    )
                 else:
                     error_text = await response.text()
                     logger.error(f"Deployment check failed ({response.status}): {error_text}")
                     return None
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="deployments")
         except aiohttp.ClientError as e:
             logger.error(f"Deployment check request failed: {e}")
             return None
@@ -157,11 +166,20 @@ class DeploymentsClient:
                 if response.status in (200, 204):
                     logger.debug(f"Deployment {deployment_id} status updated to {state.value}")
                     return True
+                elif response.status == 429:
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    raise RateLimitError(
+                        f"Rate limited during status update, retry after {retry_after}s",
+                        retry_after=retry_after,
+                        endpoint="deployments/status",
+                    )
                 else:
                     error_text = await response.text()
                     logger.error(f"Status update failed ({response.status}): {error_text}")
                     return False
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="deployments/status")
         except aiohttp.ClientError as e:
             logger.error(f"Status update request failed: {e}")
             return False
@@ -201,11 +219,20 @@ class DeploymentsClient:
                 if response.status in (200, 204):
                     logger.debug(f"Logs sent for deployment {deployment_id}")
                     return True
+                elif response.status == 429:
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    raise RateLimitError(
+                        f"Rate limited during log upload, retry after {retry_after}s",
+                        retry_after=retry_after,
+                        endpoint="deployments/logs",
+                    )
                 else:
                     error_text = await response.text()
                     logger.error(f"Log upload failed ({response.status}): {error_text}")
                     return False
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="deployments/logs")
         except aiohttp.ClientError as e:
             logger.error(f"Log upload request failed: {e}")
             return False
@@ -243,6 +270,8 @@ class DeploymentsClient:
                     logger.error(f"Artifact not accessible ({response.status})")
                     return False
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="deployments/artifact")
         except aiohttp.ClientError as e:
             logger.error(f"Artifact download check failed: {e}")
             return False
