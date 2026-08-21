@@ -177,10 +177,18 @@ class DeviceWorker:
         try:
             self._ready.set()
 
-            for simulator in self.simulators:
+            total = len(self.simulators)
+            for i, simulator in enumerate(self.simulators):
                 task = asyncio.create_task(simulator.start())
                 tasks.append(task)
-                await asyncio.sleep(0)
+                # Stagger startup to avoid a thundering herd of simultaneous
+                # auth requests from this worker's devices.
+                await asyncio.sleep(0.1)
+                started = i + 1
+                if started % 50 == 0 or started == total:
+                    logger.info(
+                        f"Worker-{self.thread_id}: started {started}/{total} simulators"
+                    )
 
             await self._shutdown_event.wait()
 
@@ -469,6 +477,7 @@ class FleetOrchestrator:
     ) -> List[Device]:
         """Create new devices for an industry profile."""
         devices = []
+        loop = asyncio.get_event_loop()
 
         logger.info(f"Creating {count} new devices for {profile.name}")
 
@@ -479,8 +488,11 @@ class FleetOrchestrator:
             identity = profile.generate_device_identity(index)
             device_id = f"{profile.config.id_prefix}-{profile.name}-{index:06d}"
 
-            # Generate RSA keypair
-            private_key, public_key = generate_rsa_keypair()
+            # Generate RSA keypair in a thread pool (CPU-intensive, blocks
+            # the event loop otherwise — noticeable on low-power devices).
+            private_key, public_key = await loop.run_in_executor(
+                None, generate_rsa_keypair
+            )
 
             # Generate initial static inventory
             inventory = profile.generate_static_inventory(
@@ -502,7 +514,9 @@ class FleetOrchestrator:
             await self.db.save_device(device)
             devices.append(device)
 
-            logger.debug(f"Created device: {device_id}")
+            created = i + 1
+            if created % 10 == 0 or created == count:
+                logger.info(f"  {profile.name}: {created}/{count} devices created")
 
         logger.info(f"Created {len(devices)} devices for {profile.name}")
         return devices
