@@ -30,6 +30,8 @@ class SimulatorConfig:
     log_file: str = "simulator.log"
     log_level: str = "INFO"
     database_path: str = "devices.db"
+    num_threads: int = 4
+    connection_limit: int = 25
 
 
 @dataclass
@@ -97,6 +99,8 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
         log_file=sim_data.get("log_file", "simulator.log"),
         log_level=sim_data.get("log_level", "INFO"),
         database_path=sim_data.get("database_path", "devices.db"),
+        num_threads=sim_data.get("num_threads", 4),
+        connection_limit=sim_data.get("connection_limit", 25),
     )
 
     # Parse industry profiles
@@ -170,9 +174,9 @@ def _validate_config(config: Config) -> None:
 
     if not config.server.personal_access_token:
         logger.warning(
-            "personal_access_token not configured - device "
-            "preauthorization is disabled. "
-            "New devices will require manual acceptance in the Mender UI."
+            "personal_access_token not configured - device preauthorization "
+            "is disabled. New devices will require manual acceptance in the "
+            "Mender UI."
         )
 
     if config.server.poll_interval < 5:

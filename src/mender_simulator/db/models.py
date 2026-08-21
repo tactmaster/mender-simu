@@ -25,6 +25,7 @@ class Device:
     industry_profile: str
     current_status: str = DeviceStatus.IDLE
     auth_token: Optional[str] = None
+    preauthorized: bool = False
     inventory_data: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -40,6 +41,7 @@ class Device:
             "industry_profile": self.industry_profile,
             "current_status": self.current_status,
             "auth_token": self.auth_token,
+            "preauthorized": int(self.preauthorized),
             "inventory_data": json.dumps(self.inventory_data),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -57,6 +59,7 @@ class Device:
             industry_profile=data["industry_profile"],
             current_status=data["current_status"],
             auth_token=data["auth_token"],
+            preauthorized=bool(data.get("preauthorized", 0)),
             inventory_data=(
                 json.loads(data["inventory_data"]) if data["inventory_data"] else {}
             ),

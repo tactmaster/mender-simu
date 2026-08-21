@@ -22,6 +22,8 @@ class DatabaseManager:
         """Initialize database connection and create tables."""
         self._connection = await aiosqlite.connect(self.db_path)
         self._connection.row_factory = aiosqlite.Row
+        # WAL mode allows concurrent readers + one writer across threads
+        await self._connection.execute("PRAGMA journal_mode=WAL")
         await self._create_tables()
         logger.info(f"Database connected: {self.db_path}")
 
@@ -43,6 +45,7 @@ class DatabaseManager:
                 industry_profile TEXT NOT NULL,
                 current_status TEXT DEFAULT 'idle',
                 auth_token TEXT,
+                preauthorized INTEGER NOT NULL DEFAULT 0,
                 inventory_data TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -71,6 +74,17 @@ class DatabaseManager:
         """)
         await self._connection.commit()
 
+        # Migrate existing DBs: add preauthorized column if missing
+        async with self._connection.execute(
+            "SELECT name FROM pragma_table_info('devices') WHERE name='preauthorized'"
+        ) as cursor:
+            if not await cursor.fetchone():
+                await self._connection.execute(
+                    "ALTER TABLE devices ADD COLUMN preauthorized "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+                await self._connection.commit()
+
     async def save_device(self, device: Device) -> None:
         """Insert or update a device in the database."""
         device.updated_at = datetime.utcnow()
@@ -80,12 +94,12 @@ class DatabaseManager:
             """
             INSERT OR REPLACE INTO devices (
                 device_id, identity_data, rsa_private_key, rsa_public_key,
-                industry_profile, current_status, auth_token, inventory_data,
-                created_at, updated_at, last_poll
+                industry_profile, current_status, auth_token, preauthorized,
+                inventory_data, created_at, updated_at, last_poll
             ) VALUES (
                 :device_id, :identity_data, :rsa_private_key, :rsa_public_key,
-                :industry_profile, :current_status, :auth_token, :inventory_data,
-                :created_at, :updated_at, :last_poll
+                :industry_profile, :current_status, :auth_token, :preauthorized,
+                :inventory_data, :created_at, :updated_at, :last_poll
             )
         """,
             data,
@@ -105,21 +119,17 @@ class DatabaseManager:
 
     async def get_all_devices(self) -> List[Device]:
         """Retrieve all devices from the database."""
-        devices = []
         async with self._connection.execute("SELECT * FROM devices") as cursor:
-            async for row in cursor:
-                devices.append(Device.from_dict(dict(row)))
-        return devices
+            rows = await cursor.fetchall()
+        return [Device.from_dict(dict(row)) for row in rows]
 
     async def get_devices_by_industry(self, industry: str) -> List[Device]:
         """Retrieve all devices for a specific industry profile."""
-        devices = []
         async with self._connection.execute(
             "SELECT * FROM devices WHERE industry_profile = ?", (industry,)
         ) as cursor:
-            async for row in cursor:
-                devices.append(Device.from_dict(dict(row)))
-        return devices
+            rows = await cursor.fetchall()
+        return [Device.from_dict(dict(row)) for row in rows]
 
     async def delete_device(self, device_id: str) -> bool:
         """Delete a device from the database."""
@@ -208,10 +218,8 @@ class DatabaseManager:
 
     async def get_active_deployments(self) -> List[DeploymentStatus]:
         """Get all active (non-completed) deployments."""
-        statuses = []
         async with self._connection.execute(
             "SELECT * FROM deployment_status WHERE status NOT IN ('success', 'failure')"
         ) as cursor:
-            async for row in cursor:
-                statuses.append(DeploymentStatus.from_dict(dict(row)))
-        return statuses
+            rows = await cursor.fetchall()
+        return [DeploymentStatus.from_dict(dict(row)) for row in rows]

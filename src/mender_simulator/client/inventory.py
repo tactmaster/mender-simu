@@ -5,13 +5,38 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from .base import BaseClient
-from .exceptions import AuthenticationError
+from .exceptions import AuthenticationError, RateLimitError, RequestTimeoutError
 
 logger = logging.getLogger(__name__)
 
 
 class InventoryClient(BaseClient):
     """Handles device inventory updates with Mender server."""
+
+    def __init__(
+        self, server_url: str, session: Optional[aiohttp.ClientSession] = None
+    ):
+        self.server_url = server_url.rstrip("/")
+        self._session: Optional[aiohttp.ClientSession] = session
+        self._owns_session = session is None
+
+    async def __aenter__(self):
+        await self._ensure_session()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def _ensure_session(self) -> None:
+        """Ensure HTTP session is created."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+            self._owns_session = True
+
+    async def close(self) -> None:
+        """Close the HTTP session if owned by this client."""
+        if self._owns_session and self._session and not self._session.closed:
+            await self._session.close()
 
     def _format_inventory(self, inventory_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -64,6 +89,14 @@ class InventoryClient(BaseClient):
                 elif response.status == 401:
                     logger.warning("Authentication token expired or invalid")
                     raise AuthenticationError("Token expired")
+                elif response.status == 429:
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    raise RateLimitError(
+                        f"Rate limited during inventory update, "
+                        f"retry after {retry_after}s",
+                        retry_after=retry_after,
+                        endpoint="inventory",
+                    )
                 else:
                     error_text = await response.text()
                     logger.error(
@@ -71,6 +104,8 @@ class InventoryClient(BaseClient):
                     )
                     return False
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="inventory")
         except aiohttp.ClientError as e:
             logger.error(f"Inventory update request failed: {e}")
             return False

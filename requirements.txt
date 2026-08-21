@@ -3,6 +3,9 @@
 # Async HTTP client
 aiohttp>=3.9.0
 
+# Live terminal dashboard
+rich>=13.0.0
+
 # Configuration
 PyYAML>=6.0
 

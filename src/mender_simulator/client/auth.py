@@ -1,5 +1,6 @@
 """Mender Authentication Client."""
 
+import asyncio
 import aiohttp
 import logging
 import json
@@ -7,6 +8,7 @@ from typing import Optional
 
 from .base import BaseClient
 from ..utils.crypto import sign_data
+from .exceptions import DeviceNotAcceptedError, RateLimitError, RequestTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +22,28 @@ class AuthClient(BaseClient):
         tenant_token: str,
         session: Optional[aiohttp.ClientSession] = None,
     ):
-        super().__init__(server_url, session)
+        self.server_url = server_url.rstrip("/")
         self.tenant_token = tenant_token
+        self._session: Optional[aiohttp.ClientSession] = session
+        self._owns_session = session is None
+
+    async def __aenter__(self):
+        await self._ensure_session()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def _ensure_session(self) -> None:
+        """Ensure HTTP session is created."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+            self._owns_session = True
+
+    async def close(self) -> None:
+        """Close the HTTP session if owned by this client."""
+        if self._owns_session and self._session and not self._session.closed:
+            await self._session.close()
 
     async def authenticate(
         self, identity_data: dict, public_key_pem: str, private_key_pem: str
@@ -48,9 +70,13 @@ class AuthClient(BaseClient):
             "tenant_token": self.tenant_token,
         }
 
-        # Sign the request body
+        # Sign the request body — offloaded to thread pool so RSA doesn't
+        # block the event loop
         request_body = json.dumps(auth_request, separators=(",", ":"))
-        signature = sign_data(private_key_pem, request_body.encode("utf-8"))
+        loop = asyncio.get_running_loop()
+        signature = await loop.run_in_executor(
+            None, sign_data, private_key_pem, request_body.encode("utf-8")
+        )
 
         headers = {"Content-Type": "application/json", "X-MEN-Signature": signature}
 
@@ -68,12 +94,15 @@ class AuthClient(BaseClient):
                     )
                     return token
                 elif response.status == 401:
-                    error_text = await response.text()
-                    logger.warning(
-                        f"Device not authorized (pending acceptance): {identity_data}"
+                    logger.debug(f"Device not accepted/preauthorized: {identity_data}")
+                    raise DeviceNotAcceptedError("Device not accepted")
+                elif response.status == 429:
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    raise RateLimitError(
+                        f"Rate limited during auth, retry after {retry_after}s",
+                        retry_after=retry_after,
+                        endpoint="auth",
                     )
-                    logger.debug(f"Auth 401 response: {error_text}")
-                    return None
                 else:
                     error_text = await response.text()
                     logger.error(
@@ -81,6 +110,8 @@ class AuthClient(BaseClient):
                     )
                     return None
 
+        except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+            raise RequestTimeoutError(str(e), endpoint="auth")
         except aiohttp.ClientError as e:
             logger.error(f"Authentication request failed: {e}")
             return None

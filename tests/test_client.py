@@ -16,7 +16,10 @@ from mender_simulator.client.deployments import (
     DeploymentsClient,
     DeploymentState,
 )
-from mender_simulator.client.exceptions import AuthenticationError
+from mender_simulator.client.exceptions import (
+    AuthenticationError,
+    DeviceNotAcceptedError,
+)
 from mender_simulator.client.inventory import InventoryClient
 from mender_simulator.client.preauth import PreauthClient
 from mender_simulator.utils.crypto import generate_rsa_keypair, verify_signature
@@ -137,11 +140,12 @@ class TestAuthClient:
         signature = call.kwargs["headers"]["X-MEN-Signature"]
         assert verify_signature(public_pem, body.encode("utf-8"), signature)
 
-    async def test_authenticate_401_returns_none(self, keypair):
+    async def test_authenticate_401_raises_device_not_accepted(self, keypair):
         private_pem, public_pem = keypair
         session = FakeSession(FakeResponse(status=401, text="pending"))
         client = AuthClient("https://mender.io", "t", session=session)
-        assert await client.authenticate({}, public_pem, private_pem) is None
+        with pytest.raises(DeviceNotAcceptedError):
+            await client.authenticate({}, public_pem, private_pem)
 
     async def test_authenticate_server_error_returns_none(self, keypair):
         private_pem, public_pem = keypair

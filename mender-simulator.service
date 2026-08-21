@@ -17,11 +17,11 @@ Group=mender-simulator
 
 WorkingDirectory=/opt/mender-simulator
 
-Environment=PATH=/opt/mender-simulator/venv/bin:/usr/local/bin:/usr/bin:/bin
-Environment=PYTHONUNBUFFERED=1
+Environment="PATH=/opt/mender-simulator/venv/bin:/usr/local/bin:/usr/bin"
+Environment="PYTHONUNBUFFERED=1"
 
-ExecStart=/opt/mender-simulator/venv/bin/python -m mender_simulator -c /opt/mender-simulator/config/config.yaml
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/opt/mender-simulator/venv/bin/python -m mender_simulator \
+    -c /opt/mender-simulator/config/config.yaml
 
 TimeoutStopSec=30
 Restart=on-failure
