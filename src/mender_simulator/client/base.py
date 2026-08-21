@@ -6,8 +6,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-#: Default timeout for all HTTP requests (30s total, 5s connect).
-DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=5)
+#: Default timeout for all HTTP requests (60s total, 10s connect).
+DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=60, connect=10)
 
 
 class BaseClient:

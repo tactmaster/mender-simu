@@ -76,18 +76,56 @@ api_call() {
     fi
 }
 
+# Fetch all devices with pagination (handles any number of devices)
+fetch_all_devices() {
+    local status="$1"
+    python3 -c "
+import json, subprocess, sys
+
+server = '${MENDER_SERVER}'
+pat = '${MENDER_PAT}'
+status = '${status}'
+per_page = 500
+page = 1
+all_devices = []
+
+while True:
+    url = f'{server}/api/management/v2/devauth/devices?per_page={per_page}&page={page}'
+    if status:
+        url += f'&status={status}'
+
+    result = subprocess.run(
+        ['curl', '-s', '-X', 'GET', '-H', f'Authorization: Bearer {pat}', url],
+        capture_output=True, text=True
+    )
+    try:
+        batch = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print('[]')
+        sys.exit(0)
+
+    if not isinstance(batch, list):
+        print('[]')
+        sys.exit(0)
+
+    all_devices.extend(batch)
+    print(f'  Fetched page {page} ({len(all_devices)} devices so far)...', file=sys.stderr)
+
+    if len(batch) < per_page:
+        break
+    page += 1
+
+print(json.dumps(all_devices))
+"
+}
+
 # List devices
 list_devices() {
     local status="$1"
-    local endpoint="/api/management/v2/devauth/devices"
-
-    if [ -n "$status" ]; then
-        endpoint="${endpoint}?status=${status}"
-    fi
 
     echo "Fetching devices from $MENDER_SERVER..."
     local response
-    response=$(api_call GET "$endpoint")
+    response=$(fetch_all_devices "$status")
 
     # Parse and display
     echo "$response" | python3 -c "
@@ -158,13 +196,8 @@ reject_device() {
 # Get all device IDs by status
 get_device_ids() {
     local status="$1"
-    local endpoint="/api/management/v2/devauth/devices"
 
-    if [ -n "$status" ]; then
-        endpoint="${endpoint}?status=${status}"
-    fi
-
-    api_call GET "$endpoint" | python3 -c "
+    fetch_all_devices "$status" | python3 -c "
 import sys, json
 try:
     devices = json.load(sys.stdin)
