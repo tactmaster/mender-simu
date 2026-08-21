@@ -98,6 +98,53 @@ LAND_CITIES = [
 ]
 
 
+# (site name, country_code, lat, lon, IANA timezone) -- real mining,
+# quarrying, and large-scale farming regions where off-highway equipment
+# (excavators, bulldozers, mining trucks, tractors) actually operates,
+# as opposed to the city centers in LAND_CITIES.
+REMOTE_SITES = [
+    ("Pilbara Iron Ore Region", "AU", -22.5000, 119.5000, "Australia/Perth"),
+    ("Bingham Canyon Mine", "US", 40.5225, -112.1489, "America/Denver"),
+    ("Carajas Mine", "BR", -6.0500, -50.1600, "America/Sao_Paulo"),
+    ("Escondida Mine", "CL", -24.2667, -69.0667, "America/Santiago"),
+    ("Vaal Reefs Mining District", "ZA", -27.0000, 26.7500, "Africa/Johannesburg"),
+    ("Norilsk Mining District", "RU", 69.3535, 88.2027, "Asia/Krasnoyarsk"),
+    ("Athabasca Oil Sands", "CA", 56.7267, -111.3790, "America/Edmonton"),
+    ("Iowa Corn Belt Farmland", "US", 42.0308, -93.6319, "America/Chicago"),
+    ("Saskatchewan Prairie Farmland", "CA", 51.5000, -106.5000, "America/Regina"),
+    (
+        "Pampas Agricultural Region", "AR", -34.5000, -62.5000,
+        "America/Argentina/Buenos_Aires",
+    ),
+    ("Punjab Farmland", "IN", 30.9000, 75.8500, "Asia/Kolkata"),
+    ("Loess Plateau Farmland", "CN", 36.5000, 109.0000, "Asia/Shanghai"),
+    ("Kalgoorlie Gold Mining District", "AU", -30.7489, 121.4656, "Australia/Perth"),
+    ("Witbank Coal Region", "ZA", -25.8752, 29.2314, "Africa/Johannesburg"),
+    ("Minnesota Iron Range Quarry", "US", 47.5333, -92.5400, "America/Chicago"),
+]
+
+
+def random_remote_site_location(jitter_degrees: float = 0.3) -> dict:
+    """Return geo-* inventory attributes for a randomly chosen remote work
+    site (mine, quarry, or large-scale farm) rather than a city.
+
+    Used for off-highway equipment (construction, agriculture, mining),
+    which realistically operates far from city centers. A larger default
+    jitter than :func:`random_land_location` is used since these sites
+    span much larger areas than an urban center.
+    """
+    site, country, lat, lon, tz = random.choice(REMOTE_SITES)
+    lat += random.uniform(-jitter_degrees, jitter_degrees)
+    lon += random.uniform(-jitter_degrees, jitter_degrees)
+    return {
+        "geo-city": site,
+        "geo-country": country,
+        "geo-lat": f"{lat:.4f}",
+        "geo-lon": f"{lon:.4f}",
+        "geo-timezone": tz,
+    }
+
+
 def random_land_location(jitter_degrees: float = 0.05) -> dict:
     """Return a dict of geo-* inventory attributes for a randomly chosen real city.
 

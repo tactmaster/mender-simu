@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mender_simulator.simulation.profiles import IndustryProfile
+from mender_simulator.simulation.geo_data import REMOTE_SITES
 from mender_simulator.utils.config import IndustryConfig
 
 
@@ -333,10 +334,12 @@ class TestOffHighwayProfile:
         assert "fuel_capacity_liters" in inventory
         assert "fuel_level_percent" in inventory
         assert inventory["gps_enabled"] is True
-        # Geo location is applied to every industry, including this one
+        # Off-highway equipment gets a remote work site, not a city
         assert "geo-lat" in inventory
         assert "geo-lon" in inventory
         assert "geo-city" in inventory
+        remote_site_names = {site for site, *_ in REMOTE_SITES}
+        assert inventory["geo-city"] in remote_site_names
 
     def test_off_highway_telemetry_update(self, off_highway_config):
         """Test off-highway telemetry increments engine hours and fuel."""

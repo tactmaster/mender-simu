@@ -5,7 +5,7 @@ from typing import Dict, Any
 from datetime import datetime
 
 from ..utils.config import IndustryConfig
-from .geo_data import random_land_location
+from .geo_data import random_land_location, random_remote_site_location
 
 
 class IndustryProfile:
@@ -314,6 +314,11 @@ class IndustryProfile:
         inventory["fuel_capacity_liters"] = random.choice([200, 400, 600, 1000])
         inventory["fuel_level_percent"] = random.randint(40, 100)
         inventory["gps_enabled"] = True
+
+        # Off-highway equipment operates at mine/quarry/farm sites, not
+        # city centers — override the generic city-based geo location
+        # already applied in generate_static_inventory().
+        inventory.update(random_remote_site_location())
 
     # Dynamic attribute updaters (called on each poll)
     # Note: Mender is NOT a real-time telemetry system. These are device
