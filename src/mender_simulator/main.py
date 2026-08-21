@@ -33,6 +33,8 @@ from .utils.config import load_config, get_enabled_industries, Config
 from .utils.crypto import generate_rsa_keypair
 from .simulation.profiles import IndustryProfile
 from .simulation.device_simulator import DeviceSimulator
+from .client.auth import AuthClient
+from .client.inventory import InventoryClient
 from .client.preauth import PreauthClient
 from .stats import FleetStats
 from .dashboard import dashboard_loop, render
@@ -380,6 +382,54 @@ class FleetOrchestrator:
         logger.info(f"Total devices initialized: {total}")
         for industry, count in counts.items():
             logger.info(f"  - {industry}: {count} devices")
+
+    async def _decommission_excess_devices(self, devices: List[Device]) -> None:
+        """Send final inventory with decommission=true, then delete from DB.
+
+        Each excess device authenticates, sends its inventory one last time
+        with ``decommission: true``, and is then removed from the database.
+        """
+        auth_client = AuthClient(
+            self.config.server.url,
+            self.config.server.tenant_token,
+        )
+        inv_client = InventoryClient(self.config.server.url)
+
+        try:
+            for device in devices:
+                # Authenticate
+                token = await auth_client.authenticate(
+                    device.identity_data,
+                    device.rsa_public_key,
+                    device.rsa_private_key,
+                )
+                if not token:
+                    logger.warning(
+                        f"Device {device.device_id} could not authenticate "
+                        "for final inventory — deleting from DB anyway"
+                    )
+                    await self.db.delete_device(device.device_id)
+                    continue
+
+                # Send inventory with decommission flag
+                device.inventory_data["decommission"] = True
+                sent = await inv_client.update_inventory(token, device.inventory_data)
+                if sent:
+                    logger.info(
+                        f"Device {device.device_id} sent decommission inventory"
+                    )
+                else:
+                    logger.warning(
+                        f"Device {device.device_id} failed to send decommission "
+                        "inventory — deleting from DB anyway"
+                    )
+
+                # Remove from database
+                await self.db.delete_device(device.device_id)
+                logger.info(f"Device {device.device_id} removed from database")
+        finally:
+            await auth_client.close()
+            await inv_client.close()
 
     async def _preauthorize_all_devices(
         self, pat: str, simulators: Optional[List[DeviceSimulator]] = None
