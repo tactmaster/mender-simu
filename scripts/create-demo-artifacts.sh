@@ -17,6 +17,7 @@ usage() {
     echo "  industrial_iot  - plc-gateway-modbus"
     echo "  retail          - pos-terminal-emv"
     echo "  ev_charging     - ev-charger-ocpp-2.0"
+    echo "  off_highway     - telematics-gateway-j1939"
     echo "  all             - All industries"
     echo ""
     echo "Examples:"
@@ -44,12 +45,13 @@ get_device_type() {
         industrial_iot) echo "plc-gateway-modbus" ;;
         retail) echo "pos-terminal-emv" ;;
         ev_charging) echo "ev-charger-ocpp-2.0" ;;
+        off_highway) echo "telematics-gateway-j1939" ;;
         *) echo "" ;;
     esac
 }
 
 # All device types
-ALL_DEVICE_TYPES="tcu-4g-lte bms-controller-hvac patient-monitor-icu plc-gateway-modbus pos-terminal-emv ev-charger-ocpp-2.0"
+ALL_DEVICE_TYPES="tcu-4g-lte bms-controller-hvac patient-monitor-icu plc-gateway-modbus pos-terminal-emv ev-charger-ocpp-2.0 telematics-gateway-j1939"
 
 # Versions to generate
 VERSIONS="v1.0.0 v1.1.0 v1.2.0 v2.0.0"
