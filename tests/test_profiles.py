@@ -276,3 +276,91 @@ class TestEVChargingProfile:
         assert "last_seen" in inventory
         assert "charger_status" in inventory
         assert inventory["charger_status"] in ["available", "charging", "faulted"]
+
+
+class TestOffHighwayProfile:
+    """Tests for off-highway machine profile."""
+
+    @pytest.fixture
+    def off_highway_config(self):
+        return IndustryConfig(
+            name="off_highway",
+            enabled=True,
+            count=6,
+            bandwidth_kbps=300,
+            id_prefix="PIN",
+            id_format="PIN-{serial}",
+            inventory={
+                "device_type": "telematics-gateway-j1939",
+                "artifact_name": "v1.0.0",
+                "equipment_types": ["excavator", "bulldozer", "wheel_loader"],
+                "protocols": ["j1939"],
+            },
+            extra_config={"manufacturers": ["CAT", "DEER"]},
+        )
+
+    def test_generate_off_highway_identity(self, off_highway_config):
+        """Test off-highway machine identity generation."""
+        profile = IndustryProfile(off_highway_config)
+
+        identity = profile.generate_device_identity(0)
+
+        assert "mac" in identity
+        assert "pin" in identity
+        assert len(identity["pin"]) == 17
+
+    def test_off_highway_identity_unique(self, off_highway_config):
+        """Test that off-highway PINs are unique."""
+        profile = IndustryProfile(off_highway_config)
+
+        identities = [profile.generate_device_identity(i) for i in range(6)]
+        pins = [id["pin"] for id in identities]
+
+        assert len(set(pins)) == len(pins)
+
+    def test_off_highway_static_inventory(self, off_highway_config):
+        """Test off-highway static inventory attributes."""
+        profile = IndustryProfile(off_highway_config)
+
+        inventory = profile.generate_static_inventory("PIN-TEST-001")
+
+        assert inventory["device_id"] == "PIN-TEST-001"
+        assert inventory["industry"] == "off_highway"
+        assert inventory["device_type"] == "telematics-gateway-j1939"
+        assert "equipment_type" in inventory
+        assert "supported_protocols" in inventory
+        assert "engine_hours" in inventory
+        assert "fuel_capacity_liters" in inventory
+        assert "fuel_level_percent" in inventory
+        assert inventory["gps_enabled"] is True
+        # Geo location is applied to every industry, including this one
+        assert "geo-lat" in inventory
+        assert "geo-lon" in inventory
+        assert "geo-city" in inventory
+
+    def test_off_highway_telemetry_update(self, off_highway_config):
+        """Test off-highway telemetry increments engine hours and fuel."""
+        profile = IndustryProfile(off_highway_config)
+
+        inventory = profile.generate_static_inventory("PIN-TEST-001")
+        initial_hours = inventory["engine_hours"]
+        inventory = profile.update_telemetry(inventory)
+
+        assert "last_seen" in inventory
+        assert inventory["engine_hours"] >= initial_hours
+        assert 0 <= inventory["fuel_level_percent"] <= 100
+
+    def test_off_highway_success_rate(self):
+        """Test that off-highway machines have a specific success rate."""
+        config = IndustryConfig(
+            name="off_highway",
+            enabled=True,
+            count=6,
+            bandwidth_kbps=300,
+            id_prefix="PIN",
+            id_format="PIN-{serial}",
+            inventory={},
+            extra_config={"manufacturers": ["CAT", "DEER"]},
+        )
+        profile = IndustryProfile(config)
+        assert profile.get_success_probability() == 0.72
