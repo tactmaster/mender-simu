@@ -5,6 +5,7 @@ from typing import Dict, Any
 from datetime import datetime
 
 from ..utils.config import IndustryConfig
+from .geo_data import random_land_location
 
 
 class IndustryProfile:
@@ -56,6 +57,11 @@ class IndustryProfile:
         base_inventory["industry"] = self.name
         base_inventory["simulator_version"] = "1.2.0"
         base_inventory["poll_interval_seconds"] = poll_interval
+
+        # Assign a random real-world (land-based) location and a hostname,
+        # matching the inventory attribute names real Mender devices report.
+        base_inventory.update(random_land_location())
+        base_inventory["hostname"] = f"{self.name}-{device_id[:8]}"
 
         # Format artifact_name as {device_type}-{version} for Mender compatibility
         version = base_inventory.get("artifact_name", "unknown")
