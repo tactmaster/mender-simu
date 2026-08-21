@@ -32,6 +32,7 @@ class IndustryProfile:
             "industrial_iot": self._generate_industrial_identity,
             "retail": self._generate_retail_identity,
             "ev_charging": self._generate_ev_charging_identity,
+            "off_highway": self._generate_off_highway_identity,
         }
 
         generator = generators.get(self.name, self._generate_generic_identity)
@@ -78,6 +79,7 @@ class IndustryProfile:
             "industrial_iot": self._enrich_industrial_static,
             "retail": self._enrich_retail_static,
             "ev_charging": self._enrich_ev_charging_static,
+            "off_highway": self._enrich_off_highway_static,
         }
 
         enricher = enrichers.get(self.name)
@@ -107,6 +109,7 @@ class IndustryProfile:
             "industrial_iot": self._update_industrial_telemetry,
             "retail": self._update_retail_telemetry,
             "ev_charging": self._update_ev_charging_telemetry,
+            "off_highway": self._update_off_highway_telemetry,
         }
 
         updater = updaters.get(self.name)
@@ -210,6 +213,25 @@ class IndustryProfile:
             "evse_id": evse_id,
         }
 
+    def _generate_off_highway_identity(self, index: int) -> Dict[str, str]:
+        """Generate PIN-based identity for off-highway machines.
+
+        Uses a Product Identification Number (PIN), the ISO 10261 analogue
+        of a VIN used by construction/agriculture/mining equipment
+        telematics (e.g. CAT, John Deere, Komatsu).
+        """
+        manufacturers = self.config.extra_config.get(
+            "manufacturers", ["CAT", "DEER", "KMTS", "VOLV"]
+        )
+        manufacturer = random.choice(manufacturers)
+        serial = f"{index:08d}"
+        pin = f"{manufacturer}{serial}"[:17].ljust(17, "0")
+
+        return {
+            "mac": self._generate_mac(),
+            "pin": pin,
+        }
+
     def _generate_generic_identity(self, index: int) -> Dict[str, str]:
         """Generate generic device identity."""
         return {
@@ -279,6 +301,20 @@ class IndustryProfile:
         )
         inventory["sessions_total"] = random.randint(0, 50000)
 
+    def _enrich_off_highway_static(self, inventory: Dict[str, Any]) -> None:
+        """Add static off-highway machine attributes."""
+        equipment_types = self.config.inventory.get(
+            "equipment_types",
+            ["excavator", "bulldozer", "wheel_loader", "backhoe", "mining_truck"],
+        )
+        inventory["equipment_type"] = random.choice(equipment_types)
+        protocols = self.config.inventory.get("protocols", ["j1939"])
+        inventory["supported_protocols"] = protocols
+        inventory["engine_hours"] = round(random.uniform(0, 15000), 1)
+        inventory["fuel_capacity_liters"] = random.choice([200, 400, 600, 1000])
+        inventory["fuel_level_percent"] = random.randint(40, 100)
+        inventory["gps_enabled"] = True
+
     # Dynamic attribute updaters (called on each poll)
     # Note: Mender is NOT a real-time telemetry system. These are device
     # status attributes that change infrequently, not sensor readings.
@@ -324,6 +360,26 @@ class IndustryProfile:
             ["available", "charging", "available", "available", "faulted"]
         )
 
+    def _update_off_highway_telemetry(self, inventory: Dict[str, Any]) -> None:
+        """Update off-highway machine status attributes."""
+        # Engine hours only increment while the machine is operating
+        current_hours = inventory.get("engine_hours", 0)
+        inventory["engine_hours"] = round(current_hours + random.uniform(0, 2), 1)
+
+        # Fuel drains slowly, with occasional refuels back to near-full
+        current_fuel = inventory.get("fuel_level_percent", 100)
+        if random.random() < 0.1:  # 10% chance of a refuel since last poll
+            inventory["fuel_level_percent"] = random.randint(90, 100)
+        else:
+            inventory["fuel_level_percent"] = max(
+                0, current_fuel - random.uniform(0, 3)
+            )
+
+        if random.random() < 0.1:  # 10% chance to change
+            inventory["machine_status"] = random.choice(
+                ["idle", "operating", "maintenance"]
+            )
+
     # Helpers
 
     def _generate_mac(self) -> str:
@@ -341,5 +397,9 @@ class IndustryProfile:
         # EV chargers in outdoor/public locations are prone to connectivity issues
         if self.name == "ev_charging":
             return 0.78
+        # Off-highway machines (mines, farms, remote job sites) often have
+        # poor connectivity
+        if self.name == "off_highway":
+            return 0.72
         # Default
         return 0.80
