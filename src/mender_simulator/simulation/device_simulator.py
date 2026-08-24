@@ -63,20 +63,31 @@ class DeviceSimulator:
         self.inventory_client = InventoryClient(config.server.url, session=session)
         self.deployments_client = DeploymentsClient(config.server.url, session=session)
 
+        # Preauth client for self-healing after decommission or first-time
+        # rejection (device not yet accepted/preauthorized on the server).
+        pat = config.server.personal_access_token
+        industry_cfg = config.industries.get(device.industry_profile)
+        self._preauth_enabled = bool(pat and industry_cfg and industry_cfg.preauth)
+        self._preauth_client: Optional[PreauthClient] = (
+            PreauthClient(config.server.url, pat, session=session)
+            if self._preauth_enabled
+            else None
+        )
+
         self._running = False
         self._current_deployment: Optional[Deployment] = None
         self._force_poll_event = asyncio.Event()
         self._stats: Optional[FleetStats] = None
         self._thread_id: int = 0
         self._has_polled = False
+        self._host_mac = _get_host_mac()
 
     def set_session(self, session: aiohttp.ClientSession) -> None:
         """Inject a shared HTTP session into all clients (owned externally)."""
-        for client in (
-            self.auth_client,
-            self.inventory_client,
-            self.deployments_client,
-        ):
+        clients = [self.auth_client, self.inventory_client, self.deployments_client]
+        if self._preauth_client:
+            clients.append(self._preauth_client)
+        for client in clients:
             client._session = session
             client._owns_session = False
 
