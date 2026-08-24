@@ -15,6 +15,8 @@ simulator:
   log_file: "simulator.log"
   log_level: "INFO"
   database_path: "devices.db"
+  num_threads: 4        # worker threads the fleet is partitioned across
+  connection_limit: 25  # max concurrent HTTP connections per worker thread
 
 # Industry profiles with device groups
 industries:

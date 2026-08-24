@@ -3,6 +3,9 @@
 # Create demo artifacts for Mender Fleet Simulator
 # Requires: mender-artifact tool (https://docs.mender.io/downloads)
 #
+# Set MENDER_PAT to also auto-upload each artifact to the server via
+# mender-cli (https://docs.mender.io/downloads) as it's created.
+#
 
 set -e
 
@@ -20,12 +23,20 @@ usage() {
     echo "  off_highway     - telematics-gateway-j1939"
     echo "  all             - All industries"
     echo ""
+    echo "Environment variables:"
+    echo "  MENDER_SERVER  - Mender server URL (default: https://hosted.mender.io)"
+    echo "  MENDER_PAT     - Personal Access Token; if set, each artifact is"
+    echo "                   auto-uploaded to the server as it's created"
+    echo ""
     echo "Examples:"
     echo "  $0 smart_buildings"
     echo "  $0 automotive ./my-artifacts"
     echo "  $0 all ./artifacts"
+    echo "  MENDER_PAT='...' $0 all ./artifacts"
     exit 1
 }
+
+MENDER_SERVER="${MENDER_SERVER:-https://hosted.mender.io}"
 
 # Check arguments
 if [ -z "$1" ]; then
@@ -64,6 +75,13 @@ if ! command -v mender-artifact &> /dev/null; then
     echo ""
     echo "macOS:   brew install mender-artifact"
     echo "Linux:   Download from Mender website"
+    exit 1
+fi
+
+if [ -n "$MENDER_PAT" ] && ! command -v mender-cli &> /dev/null; then
+    echo "Error: MENDER_PAT is set but mender-cli not found"
+    echo ""
+    echo "Install it from: https://docs.mender.io/downloads"
     exit 1
 fi
 
@@ -107,6 +125,21 @@ for DEVICE_TYPE in $DEVICE_TYPES; do
 
         SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
         echo "    -> $OUTPUT_FILE ($SIZE)"
+
+        if [ -n "$MENDER_PAT" ]; then
+            echo "    Uploading to ${MENDER_SERVER}..."
+            UPLOAD_OUTPUT=$(mender-cli artifacts upload "$OUTPUT_FILE" \
+                --server "$MENDER_SERVER" --token-value "$MENDER_PAT" \
+                --description "$ARTIFACT_NAME" --no-progress 2>&1) || true
+
+            if echo "$UPLOAD_OUTPUT" | grep -q "upload successful"; then
+                echo "    -> uploaded"
+            elif echo "$UPLOAD_OUTPUT" | grep -q "status 409"; then
+                echo "    -> already exists on server, skipping"
+            else
+                echo "    -> upload failed: $UPLOAD_OUTPUT"
+            fi
+        fi
     done
     echo ""
 done
@@ -120,5 +153,10 @@ FIRST_DEVICE=$(echo "$DEVICE_TYPES" | awk '{print $1}')
 echo "=== Summary ==="
 echo "Created artifacts in $OUTPUT_DIR"
 echo ""
-echo "To upload to Mender:"
-echo "  mender-cli artifacts upload $OUTPUT_DIR/${FIRST_DEVICE}*.mender"
+if [ -n "$MENDER_PAT" ]; then
+    echo "Uploaded to $MENDER_SERVER as each artifact was created."
+else
+    echo "To upload to Mender:"
+    echo "  mender-cli artifacts upload $OUTPUT_DIR/${FIRST_DEVICE}*.mender"
+    echo "  (or re-run with MENDER_PAT set to auto-upload)"
+fi
