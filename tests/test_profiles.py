@@ -340,6 +340,8 @@ class TestOffHighwayProfile:
         assert "geo-city" in inventory
         remote_site_names = {site for site, *_ in REMOTE_SITES}
         assert inventory["geo-city"] in remote_site_names
+        # Short hostname (OHM-xxx), not the generic "{industry}-{device_id[:8]}"
+        assert inventory["hostname"] == "OHM-001"
 
     def test_off_highway_telemetry_update(self, off_highway_config):
         """Test off-highway telemetry increments engine hours and fuel."""
