@@ -99,6 +99,9 @@ class TestIndustryProfile:
         assert "simulator_version" in inventory
         # last_seen is telemetry, not in static inventory
         assert "last_seen" not in inventory
+        # Every device gets a location and an initial health status
+        assert "geo-lat" in inventory
+        assert inventory["device_status"] == "Working"
 
     def test_generate_static_inventory_enrichment(self, automotive_config):
         """Test that industry-specific static attributes are added."""
@@ -123,6 +126,7 @@ class TestIndustryProfile:
         # Note: Mender is NOT real-time telemetry, only device status
         assert "last_seen" in inventory
         assert "odometer_km" in inventory
+        assert inventory["device_status"] in ("Working", "Warning", "Error")
 
 
 class TestDownloadTimeCalculation:
