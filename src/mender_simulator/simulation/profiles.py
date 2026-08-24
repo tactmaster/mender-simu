@@ -64,6 +64,9 @@ class IndustryProfile:
         base_inventory.update(random_land_location())
         base_inventory["hostname"] = f"{self.name}-{device_id[:8]}"
 
+        # Overall simulated device health status, updated on each poll
+        base_inventory["device_status"] = "Working"
+
         # Format artifact_name as {device_type}-{version} for Mender compatibility
         version = base_inventory.get("artifact_name", "unknown")
         device_type = base_inventory.get("device_type", "unknown")
@@ -100,6 +103,12 @@ class IndustryProfile:
         """
         # Update common dynamic attributes
         inventory["last_seen"] = datetime.utcnow().isoformat()
+
+        # Overall simulated device health status — mostly healthy, with
+        # occasional warnings and rare errors.
+        inventory["device_status"] = random.choices(
+            ["Working", "Warning", "Error"], weights=[85, 12, 3]
+        )[0]
 
         # Add industry-specific telemetry
         updaters = {
