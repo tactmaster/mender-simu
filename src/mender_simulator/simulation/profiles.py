@@ -315,6 +315,13 @@ class IndustryProfile:
         inventory["fuel_level_percent"] = random.randint(40, 100)
         inventory["gps_enabled"] = True
 
+        # Short hostname (OHM = Off-Highway Machine) — the generic
+        # "{industry}-{device_id[:8]}" formula produces an awkward,
+        # truncated name here since the device_id already contains
+        # "off_highway" (e.g. "off_highway-PIN-off_").
+        index = inventory["device_id"].rsplit("-", 1)[-1]
+        inventory["hostname"] = f"OHM-{int(index):03d}"
+
         # Off-highway equipment operates at mine/quarry/farm sites, not
         # city centers — override the generic city-based geo location
         # already applied in generate_static_inventory().
