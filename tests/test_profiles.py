@@ -102,6 +102,8 @@ class TestIndustryProfile:
         # Every device gets a location and an initial health status
         assert "geo-lat" in inventory
         assert inventory["device_status"] == "Working"
+        # Short per-industry hostname, not the raw device_id
+        assert inventory["hostname"] == "TCU-001"
 
     def test_generate_static_inventory_enrichment(self, automotive_config):
         """Test that industry-specific static attributes are added."""
@@ -268,6 +270,7 @@ class TestEVChargingProfile:
         assert "supported_protocols" in inventory
         assert "connector_type" in inventory
         assert "max_power_kw" in inventory
+        assert inventory["hostname"] == "EVC-001"
         assert "location_type" in inventory
         assert "sessions_total" in inventory
 

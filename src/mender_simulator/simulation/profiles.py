@@ -7,6 +7,19 @@ from datetime import datetime
 from ..utils.config import IndustryConfig
 from .geo_data import random_land_location, random_remote_site_location
 
+#: Short, memorable hostname prefix per industry (matches the industry's
+#: device_type acronym rather than its identity id_prefix, which can be
+#: ambiguous — e.g. off_highway's id_prefix is "PIN", not "OHM").
+HOSTNAME_PREFIXES = {
+    "automotive": "TCU",
+    "smart_buildings": "BMS",
+    "medical": "MED",
+    "industrial_iot": "PLC",
+    "retail": "POS",
+    "ev_charging": "EVC",
+    "off_highway": "OHM",
+}
+
 
 class IndustryProfile:
     """Generates realistic device identities and inventory for each industry."""
@@ -62,7 +75,12 @@ class IndustryProfile:
         # Assign a random real-world (land-based) location and a hostname,
         # matching the inventory attribute names real Mender devices report.
         base_inventory.update(random_land_location())
-        base_inventory["hostname"] = f"{self.name}-{device_id[:8]}"
+        prefix = HOSTNAME_PREFIXES.get(self.name, self.name[:3].upper())
+        index = device_id.rsplit("-", 1)[-1]
+        try:
+            base_inventory["hostname"] = f"{prefix}-{int(index):03d}"
+        except ValueError:
+            base_inventory["hostname"] = f"{prefix}-{device_id[:8]}"
 
         # Overall simulated device health status, updated on each poll
         base_inventory["device_status"] = "Working"
@@ -323,13 +341,6 @@ class IndustryProfile:
         inventory["fuel_capacity_liters"] = random.choice([200, 400, 600, 1000])
         inventory["fuel_level_percent"] = random.randint(40, 100)
         inventory["gps_enabled"] = True
-
-        # Short hostname (OHM = Off-Highway Machine) — the generic
-        # "{industry}-{device_id[:8]}" formula produces an awkward,
-        # truncated name here since the device_id already contains
-        # "off_highway" (e.g. "off_highway-PIN-off_").
-        index = inventory["device_id"].rsplit("-", 1)[-1]
-        inventory["hostname"] = f"OHM-{int(index):03d}"
 
         # Off-highway equipment operates at mine/quarry/farm sites, not
         # city centers — override the generic city-based geo location
